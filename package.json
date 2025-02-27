@@ -1,0 +1,37 @@
+{
+  "name": "koreo-ts",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Typescript library for Koreo",
+  "main": "dist/index.ts",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/koreo-dev/koreo-ts.git"
+  },
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/koreo-dev/koreo-ts/issues"
+  },
+  "homepage": "https://github.com/koreo-dev/koreo-ts#readme",
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "^1.0.0",
+    "@types/uuid": "9.0.8"
+  }
+}
