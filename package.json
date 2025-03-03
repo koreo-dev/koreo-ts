@@ -1,5 +1,5 @@
 {
-  "name": "koreo-ts",
+  "name": "@koreo/koreo-ts",
   "version": "0.0.1",
   "type": "module",
   "description": "Typescript library for Koreo",
