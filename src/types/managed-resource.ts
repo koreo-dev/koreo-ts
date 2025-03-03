@@ -16,8 +16,9 @@ export type ManagedResource =
   | KubernetesResource[] // forEach on a ResourceFunction
   | ManagedResources // sub-workflow
   | ManagedResources[] // forEach on a sub-workflow
-  | KubernetesResourceOrManagedResources[]; // forEach on a refSwitch
+  | KubernetesResourceOrManagedResources[] // forEach on a refSwitch
+  | null;
 
 export interface ManagedResources {
-  [key: string]: ManagedResource | null;
+  [key: string]: ManagedResource;
 }

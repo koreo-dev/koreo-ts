@@ -3,6 +3,7 @@ export * from "./types/managed-resource";
 export * from "./types/resource-template";
 export * from "./types/workflow";
 export * from "./types/kubernetes";
+export * from "./types/graph";
 
 export * from "./api/functions";
 export * from "./api/managed-resources";

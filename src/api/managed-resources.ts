@@ -6,13 +6,15 @@ import {
 } from "../types/managed-resource";
 import { WorkflowParent } from "../types/workflow";
 
+const MANAGED_RESOURCES_ANNOTATION = "koreo.dev/managed-resources";
+
 export const parseManagedResources = (
   managedResourcesStringOrParent: string | WorkflowParent
 ): ManagedResources => {
   const managedResourcesString =
     typeof managedResourcesStringOrParent !== "string"
       ? managedResourcesStringOrParent.metadata.annotations[
-          "koreo.realkinetic.com/managed-resources"
+          MANAGED_RESOURCES_ANNOTATION
         ]
       : managedResourcesStringOrParent;
 
@@ -82,7 +84,9 @@ export const countManagedResources = (resources: ManagedResources): number => {
   }, 0);
 };
 
-const isKubernetesResource = (value: ManagedResource | null): boolean => {
+export const isKubernetesResource = (
+  value: ManagedResource | null
+): value is KubernetesResource => {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -95,7 +99,7 @@ const isKubernetesResource = (value: ManagedResource | null): boolean => {
   );
 };
 
-const isKubernetesResourceArray = (
+export const isKubernetesResourceArray = (
   value: ManagedResource | null
 ): value is KubernetesResource[] => {
   return (
@@ -122,7 +126,7 @@ export const isManagedResourcesArray = (
   );
 };
 
-const isKubernetesResourceOrManagedResourcesArray = (
+export const isKubernetesResourceOrManagedResourcesArray = (
   value: ManagedResource | null
 ): value is KubernetesResourceOrManagedResources[] => {
   return (
