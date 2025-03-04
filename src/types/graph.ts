@@ -42,6 +42,7 @@ export type ValueFunctionNode = {
   id: string;
   type: "ValueFunction";
   krm: ValueFunction;
+  dependents: Record<string, KNode>;
   metadata?: Record<string, unknown>;
 };
 
@@ -49,6 +50,7 @@ export type ResourceFunctionNode = {
   id: string;
   type: "ResourceFunction";
   krm: ResourceFunction;
+  dependents: Record<string, KNode>;
   managedResources?: ManagedKubernetesResource[];
   metadata?: Record<string, unknown>;
 };
@@ -57,6 +59,7 @@ export type WorkflowNode = {
   id: string;
   type: "Workflow";
   krm: Workflow;
+  dependents: Record<string, KNode>;
   metadata?: Record<string, unknown>;
 };
 
@@ -65,6 +68,7 @@ export type RefSwitchNode = {
   type: "RefSwitch";
   switchOn: string;
   caseNodes: Record<string, FunctionNode | SubWorkflowNode>;
+  dependents: Record<string, KNode>;
   managedResources?: ManagedKubernetesResource[];
   metadata?: Record<string, unknown>;
 };
@@ -74,6 +78,7 @@ export type SubWorkflowNode = {
   type: "SubWorkflow";
   workflowGraph: Graph;
   workflowLeafNodeIds: string[];
+  dependents: Record<string, KNode>;
   metadata?: Record<string, unknown>;
 };
 
@@ -81,6 +86,7 @@ export type ParentNode = {
   id: string;
   type: "Parent";
   krm: WorkflowParent;
+  dependents: Record<string, KNode>;
   metadata?: Record<string, unknown>;
 };
 

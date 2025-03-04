@@ -100,11 +100,7 @@ const getWorkflowGraphWithLeafNodes = async (
     }
     parentNode = createParentNode(parent);
     graph.nodes[parentNode.id] = parentNode;
-    const parentEdge = createEdge(
-      parentNode.id,
-      workflowNode.id,
-      "ParentToWorkflow"
-    );
+    const parentEdge = createEdge(parentNode, workflowNode, "ParentToWorkflow");
     graph.edges[parentEdge.id] = parentEdge;
     managedResources = parseManagedResources(parent);
   }
@@ -127,10 +123,11 @@ const getWorkflowGraphWithLeafNodes = async (
   allSteps.forEach((step) => {
     const stepLabel = step.label || DEFAULT_CONFIG_STEP_LABEL;
     let hasDependency = false;
-    const stepNode = stepNodes[stepLabel];
-    if (!stepNode) {
+    const stepNodeId = stepNodes[stepLabel];
+    if (!stepNodeId || !graph.nodes[stepNodeId]) {
       return;
     }
+    const stepNode = graph.nodes[stepNodeId];
 
     if (step.inputs) {
       Object.values(step.inputs).forEach((inputValue) => {
@@ -141,13 +138,17 @@ const getWorkflowGraphWithLeafNodes = async (
         if (match) {
           hasDependency = true;
           const parentLabel = match[1];
-          const parentNode = stepNodes[parentLabel];
-          if (!parentNode) {
+          const parentNodeId = stepNodes[parentLabel];
+          if (!parentNodeId || !graph.nodes[parentNodeId]) {
             return;
           }
-          const edge = createEdge(parentNode, stepNode, "StepToStep");
+          const edge = createEdge(
+            graph.nodes[parentNodeId],
+            stepNode,
+            "StepToStep"
+          );
           graph.edges[edge.id] = edge;
-          nodesWithDependents.add(parentNode);
+          nodesWithDependents.add(parentNodeId);
         }
       });
     }
@@ -157,7 +158,7 @@ const getWorkflowGraphWithLeafNodes = async (
     }
 
     // It's a root step so add an edge back to the Workflow.
-    const edge = createEdge(workflowNode.id, stepNode, "WorkflowToStep");
+    const edge = createEdge(workflowNode, stepNode, "WorkflowToStep");
     graph.edges[edge.id] = edge;
   });
 
@@ -564,6 +565,7 @@ const createWorkflowNode = (
     id: workflow.metadata?.uid || uuidv4(),
     krm: workflow,
     type: "Workflow",
+    dependents: {},
     metadata: stepLabel ? { label: stepLabel } : undefined,
   };
 };
@@ -576,6 +578,7 @@ const createValueFunctionNode = (
     id: logic.metadata?.uid || uuidv4(),
     krm: logic,
     type: "ValueFunction",
+    dependents: {},
     metadata: stepLabel ? { label: stepLabel } : undefined,
   };
 };
@@ -588,6 +591,7 @@ const createResourceFunctionNode = (
     id: logic.metadata?.uid || uuidv4(),
     krm: logic,
     type: "ResourceFunction",
+    dependents: {},
     metadata: stepLabel ? { label: stepLabel } : undefined,
   };
 };
@@ -597,6 +601,7 @@ const createParentNode = (parent: WorkflowParent): ParentNode => {
     id: parent.metadata?.uid || uuidv4(),
     krm: parent,
     type: "Parent",
+    dependents: {},
   };
 };
 
@@ -615,6 +620,7 @@ const createRefSwitchNode = (
     switchOn: switchOn,
     caseNodes: caseNodes,
     managedResources: managedResources,
+    dependents: {},
     metadata: stepLabel ? { label: stepLabel } : undefined,
   };
 };
@@ -632,18 +638,16 @@ const createSubWorkflowNode = (
     workflowGraph,
     workflowLeafNodeIds,
     type: "SubWorkflow",
+    dependents: {},
   };
 };
 
-const createEdge = (
-  sourceId: string,
-  targetId: string,
-  type: EdgeType
-): KEdge => {
+const createEdge = (source: KNode, target: KNode, type: EdgeType): KEdge => {
+  source.dependents[target.id] = target;
   return {
-    id: `${sourceId}:${targetId}`,
-    source: sourceId,
-    target: targetId,
+    id: `${source.id}:${target.id}`,
+    source: source.id,
+    target: target.id,
     type: type,
   };
 };
