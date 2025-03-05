@@ -33,10 +33,8 @@ import {
 import {
   parseManagedResources,
   isKubernetesResource,
-  isKubernetesResourceArray,
   isKubernetesResourceOrManagedResourcesArray,
   isManagedResources,
-  isManagedResourcesArray,
 } from "./managed-resources";
 import { getK8sObjectApi } from "./kubernetes";
 
@@ -196,7 +194,7 @@ const addStepNodes = async (
       step.refSwitch,
       namespace,
       stepLabel,
-      managedResources?.[stepLabel]
+      managedResources?.resources?.[stepLabel]
     );
     return;
   }
@@ -208,7 +206,10 @@ const addStepNodes = async (
       namespace,
       stepLabel,
       step.ref!.name,
-      managedResources?.[stepLabel]
+      getManagedResourcesForWorkflow(
+        step.ref!.name,
+        managedResources?.resources?.[stepLabel]
+      )
     );
     if (subWorkflowNode) {
       graph.nodes[subWorkflowNode.id] = subWorkflowNode;
@@ -231,7 +232,10 @@ const addStepNodes = async (
       namespace,
       step.ref!.name,
       stepLabel,
-      managedResources?.[stepLabel]
+      getManagedResourcesForResourceFunction(
+        step.ref!.name,
+        managedResources?.resources?.[stepLabel]
+      )
     );
     if (stepNode && stepNode.managedResources) {
       graph.managedResources.push(...stepNode.managedResources);
@@ -260,7 +264,7 @@ const getResourceFunctionNode = async (
   namespace: string,
   name: string,
   stepLabel: string,
-  managedResource?: ManagedResource
+  managedResource?: KubernetesResource[] // it's a list because it could be within a forEach
 ): Promise<ResourceFunctionNode | null> => {
   const func = await getResourceFunction(name, namespace);
   if (!func) {
@@ -275,51 +279,12 @@ const getResourceFunctionNode = async (
 
   node.managedResources = [];
 
-  // Plain ResourceFunction
-  if (isKubernetesResource(managedResource)) {
-    const k8sResource = await addManagedResource(
-      managedResource,
-      node as ResourceFunctionNode
-    );
-    if (k8sResource) {
-      node.managedResources.push(k8sResource);
-    }
-    return node;
-  }
-
-  // forEach on a ResourceFunction
-  if (isKubernetesResourceArray(managedResource)) {
-    const results = await Promise.all(
-      managedResource.map((resource) =>
-        addManagedResource(resource, node as ResourceFunctionNode)
-      )
-    );
-    node.managedResources.push(
-      ...results.filter((k8sResource) => k8sResource !== null)
-    );
-    return node;
-  }
-
-  // forEach on a refSwitch
-  if (isKubernetesResourceOrManagedResourcesArray(managedResource)) {
-    const results = await Promise.all(
-      managedResource
-        .filter((k8sResourceOrManagedResources) =>
-          isKubernetesResource(k8sResourceOrManagedResources)
-        )
-        .map((resource) =>
-          addManagedResource(
-            resource as KubernetesResource,
-            node as ResourceFunctionNode
-          )
-        )
-    );
-    node.managedResources.push(
-      ...results.filter((k8sResource) => k8sResource !== null)
-    );
-    return node;
-  }
-
+  const results = await Promise.all(
+    managedResource.map((resource) => addManagedResource(resource, node))
+  );
+  node.managedResources.push(
+    ...results.filter((k8sResource) => k8sResource !== null)
+  );
   return node;
 };
 
@@ -346,129 +311,60 @@ const getSubWorkflowNode = async (
   namespace: string,
   stepLabel: string,
   subWorkflowId: string,
-  managedResource?: ManagedResource
+  managedResources?: ManagedResources[] // it's a list because it could be within a forEach
 ): Promise<SubWorkflowNode | null> => {
-  if (!managedResource) {
-    const { graph: workflowGraph, leafNodes } =
-      await getWorkflowGraphWithLeafNodes(namespace, subWorkflowId, stepLabel);
+  // First get the graph structure
+  const { graph: workflowGraph, leafNodes } =
+    await getWorkflowGraphWithLeafNodes(namespace, subWorkflowId, stepLabel);
+  if (!workflowGraph.nodes) {
+    return null;
+  }
+  const subWorkflowNode = createSubWorkflowNode(
+    workflowGraph.nodes[0] as WorkflowNode,
+    workflowGraph,
+    leafNodes
+  );
 
-    if (!workflowGraph.nodes) {
-      return null;
-    }
-
-    const subWorkflowNode = createSubWorkflowNode(
-      workflowGraph.nodes[0] as WorkflowNode,
-      workflowGraph,
-      leafNodes
-    );
+  if (!managedResources) {
     return subWorkflowNode;
   }
 
-  if (isManagedResources(managedResource)) {
-    // Simple sub-workflow
-    const { graph: workflowGraph, leafNodes } =
-      await getWorkflowGraphWithLeafNodes(
-        namespace,
-        subWorkflowId,
-        stepLabel,
-        undefined,
-        managedResource
-      );
-
-    if (!workflowGraph.nodes) {
-      return null;
-    }
-
-    const subWorkflowNode = createSubWorkflowNode(
-      workflowGraph.nodes[0] as WorkflowNode,
-      workflowGraph,
-      leafNodes
+  // Get the managed resources for each iteration.
+  const subWorkflowResources: ManagedKubernetesResource[] = [];
+  for (const iterationManagedResources of managedResources) {
+    const { graph: workflowGraph } = await getWorkflowGraphWithLeafNodes(
+      namespace,
+      subWorkflowId,
+      stepLabel,
+      undefined,
+      iterationManagedResources
     );
-    return subWorkflowNode;
-  }
 
-  if (isManagedResourcesArray(managedResource)) {
-    // forEach on a sub-workflow
-    let subWorkflowNode: SubWorkflowNode | null = null;
-    const subWorkflowResources: ManagedKubernetesResource[] = [];
-    for (const iterationManagedResources of managedResource) {
-      const { graph: workflowGraph, leafNodes } =
-        await getWorkflowGraphWithLeafNodes(
-          namespace,
-          subWorkflowId,
-          stepLabel,
-          undefined,
-          iterationManagedResources
-        );
-
-      if (workflowGraph.managedResources) {
-        subWorkflowResources.push(...workflowGraph.managedResources);
-      }
-
-      if (!subWorkflowNode) {
-        if (!workflowGraph.nodes) {
-          return null;
+    // We need to add all the managed resources from the iteration's
+    // ResourceFunctions and add them to the SubWorkflowNode we return. This is
+    // a bit hacky...
+    subWorkflowNode.workflowGraph.nodes.forEach((node) => {
+      workflowGraph.nodes.forEach((iterationNode) => {
+        if (
+          node.id === iterationNode.id &&
+          node.type === "ResourceFunction" &&
+          iterationNode.type === "ResourceFunction" &&
+          iterationNode.managedResources
+        ) {
+          if (!node.managedResources) {
+            node.managedResources = [];
+          }
+          node.managedResources.push(...iterationNode.managedResources);
         }
+      });
+    });
 
-        subWorkflowNode = createSubWorkflowNode(
-          workflowGraph.nodes[0] as WorkflowNode,
-          workflowGraph,
-          leafNodes
-        );
-      }
+    if (workflowGraph.managedResources) {
+      subWorkflowResources.push(...workflowGraph.managedResources);
     }
-    if (!subWorkflowNode) {
-      return null;
-    }
-    subWorkflowNode.workflowGraph.managedResources = subWorkflowResources;
-    return subWorkflowNode;
   }
-
-  if (isKubernetesResourceOrManagedResourcesArray(managedResource)) {
-    // forEach on a refSwitch
-
-    // First get the graph structure
-    const { graph: workflowGraph, leafNodes } =
-      await getWorkflowGraphWithLeafNodes(namespace, subWorkflowId, stepLabel);
-    if (!workflowGraph.nodes) {
-      return null;
-    }
-    const subWorkflowNode = createSubWorkflowNode(
-      workflowGraph.nodes[0] as WorkflowNode,
-      workflowGraph,
-      leafNodes
-    );
-
-    // Get the managed resources for each iteration.
-    // NOTE: this currently has an issue if there are multiple switch cases
-    // that are sub-workflows because we can't distinguish which managed
-    // resources to pass down.
-    const subWorkflowResources: ManagedKubernetesResource[] = [];
-    const subWorkflowManagedResources = managedResource.filter(
-      (k8sResourceOrManagedResources) =>
-        isManagedResources(k8sResourceOrManagedResources)
-    );
-    for (const iterationManagedResources of subWorkflowManagedResources) {
-      const { graph: workflowGraph } = await getWorkflowGraphWithLeafNodes(
-        namespace,
-        subWorkflowId,
-        stepLabel,
-        undefined,
-        iterationManagedResources as ManagedResources
-      );
-
-      if (workflowGraph.managedResources) {
-        subWorkflowResources.push(...workflowGraph.managedResources);
-      }
-    }
-    if (!subWorkflowNode) {
-      return null;
-    }
-    subWorkflowNode.workflowGraph.managedResources = subWorkflowResources;
-    return subWorkflowNode;
-  }
-
-  return null;
+  subWorkflowNode.workflowGraph.managedResources = subWorkflowResources;
+  return subWorkflowNode;
 };
 
 const getKubernetesResource = async (
@@ -495,6 +391,68 @@ const getKubernetesResource = async (
   }
 };
 
+const getManagedResourcesForWorkflow = (
+  workflowId: string,
+  managedResource?: ManagedResource
+): ManagedResources[] | undefined => {
+  if (!managedResource) {
+    return undefined;
+  }
+
+  if (
+    isManagedResources(managedResource) &&
+    managedResource.workflow === workflowId
+  ) {
+    return [managedResource];
+  }
+
+  if (isKubernetesResourceOrManagedResourcesArray(managedResource)) {
+    const managedResources: ManagedResources[] = [];
+    managedResource.forEach((k8sResourceOrManagedResources) => {
+      if (
+        isManagedResources(k8sResourceOrManagedResources) &&
+        k8sResourceOrManagedResources.workflow === workflowId
+      ) {
+        managedResources.push(k8sResourceOrManagedResources);
+      }
+    });
+    return managedResources;
+  }
+
+  return undefined;
+};
+
+const getManagedResourcesForResourceFunction = (
+  functionId: string,
+  managedResource?: ManagedResource
+): KubernetesResource[] | undefined => {
+  if (!managedResource) {
+    return undefined;
+  }
+
+  if (
+    isKubernetesResource(managedResource) &&
+    managedResource.resourceFunction === functionId
+  ) {
+    return [managedResource];
+  }
+
+  if (isKubernetesResourceOrManagedResourcesArray(managedResource)) {
+    const managedResources: KubernetesResource[] = [];
+    managedResource.forEach((k8sResourceOrManagedResources) => {
+      if (
+        isKubernetesResource(k8sResourceOrManagedResources) &&
+        k8sResourceOrManagedResources.resourceFunction === functionId
+      ) {
+        managedResources.push(k8sResourceOrManagedResources);
+      }
+    });
+    return managedResources;
+  }
+
+  return undefined;
+};
+
 const addRefSwitchNode = async (
   graph: DedupedGraph,
   stepNodes: Record<string, string>,
@@ -513,7 +471,7 @@ const addRefSwitchNode = async (
         namespace,
         stepLabel,
         switchCase.name,
-        managedResource
+        getManagedResourcesForWorkflow(switchCase.name, managedResource)
       );
       logicNode = subWorkflowNode;
       if (subWorkflowNode?.workflowGraph.managedResources) {
@@ -533,7 +491,10 @@ const addRefSwitchNode = async (
           namespace,
           switchCase.name,
           stepLabel,
-          managedResource
+          getManagedResourcesForResourceFunction(
+            switchCase.name,
+            managedResource
+          )
         );
         logicNode = resourceFuncNode;
         if (resourceFuncNode?.managedResources) {

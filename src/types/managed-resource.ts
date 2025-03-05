@@ -1,10 +1,11 @@
 export type KubernetesResource = {
   apiVersion: string;
   kind: string;
-  plural: string;
+  plural?: string;
   name: string;
   readonly: boolean;
-  namespace: string;
+  namespace?: string;
+  resourceFunction: string;
 };
 
 export type KubernetesResourceOrManagedResources =
@@ -13,12 +14,11 @@ export type KubernetesResourceOrManagedResources =
 
 export type ManagedResource =
   | KubernetesResource // ResourceFunction
-  | KubernetesResource[] // forEach on a ResourceFunction
   | ManagedResources // sub-workflow
-  | ManagedResources[] // forEach on a sub-workflow
-  | KubernetesResourceOrManagedResources[] // forEach on a refSwitch
+  | KubernetesResourceOrManagedResources[] // forEach
   | null;
 
 export interface ManagedResources {
-  [key: string]: ManagedResource;
+  workflow: string;
+  resources: Record<string, ManagedResource>;
 }

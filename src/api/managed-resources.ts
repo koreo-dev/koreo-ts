@@ -23,7 +23,7 @@ export const parseManagedResources = (
     return parsed;
   } catch (error) {
     console.error("Failed to parse managed-resources:", error);
-    return {};
+    return { workflow: "", resources: {} };
   }
 };
 
@@ -39,45 +39,21 @@ export const countManagedResources = (resources: ManagedResources): number => {
       return sum + 1;
     }
 
-    // Handle array of KubernetesResources (forEach on a ResourceFunction)
-    if (isKubernetesResourceArray(resource)) {
-      return sum + resource.length;
+    // Handle array of KubernetesResources/ManagedResources
+    if (isKubernetesResourceOrManagedResourcesArray(resource)) {
+      resource.forEach((k8sResourceOrManagedResources) => {
+        if (isKubernetesResource(k8sResourceOrManagedResources)) {
+          sum += 1;
+        } else {
+          sum += countManagedResources(k8sResourceOrManagedResources);
+        }
+      });
+      return sum;
     }
 
     // Handle nested ManagedResources (sub-workflow)
     if (isManagedResources(resource)) {
       return sum + countManagedResources(resource);
-    }
-
-    // Handle array of ManagedResources (forEach on a sub-workflow)
-    if (isManagedResourcesArray(resource)) {
-      return (
-        sum +
-        resource.reduce(
-          (subtotal, managedResources) =>
-            subtotal + countManagedResources(managedResources),
-          0
-        )
-      );
-    }
-
-    // Handle array of KubernetesResourceOrManagedResources (forEach on a
-    // refSwitch)
-    if (isKubernetesResourceOrManagedResourcesArray(resource)) {
-      return (
-        sum +
-        resource.reduce((subtotal, k8sResourceOrManagedResources) => {
-          if (isKubernetesResource(k8sResourceOrManagedResources)) {
-            return subtotal + 1;
-          }
-          if (isManagedResources(k8sResourceOrManagedResources)) {
-            return (
-              subtotal + countManagedResources(k8sResourceOrManagedResources)
-            );
-          }
-          return subtotal;
-        }, 0)
-      );
     }
 
     return sum;
@@ -92,18 +68,9 @@ export const isKubernetesResource = (
     value !== null &&
     "apiVersion" in value &&
     "kind" in value &&
-    "plural" in value &&
     "name" in value &&
     "readonly" in value &&
-    "namespace" in value
-  );
-};
-
-export const isKubernetesResourceArray = (
-  value: ManagedResource | null
-): value is KubernetesResource[] => {
-  return (
-    Array.isArray(value) && value.every((item) => isKubernetesResource(item))
+    "resourceFunction" in value
   );
 };
 
@@ -115,14 +82,6 @@ export const isManagedResources = (
     value !== null &&
     !Array.isArray(value) &&
     !isKubernetesResource(value)
-  );
-};
-
-export const isManagedResourcesArray = (
-  value: ManagedResource | null
-): value is ManagedResources[] => {
-  return (
-    Array.isArray(value) && value.every((item) => isManagedResources(item))
   );
 };
 
