@@ -277,24 +277,20 @@ const getResourceFunctionNode = async (
     return node;
   }
 
-  node.managedResources = [];
-
-  const results = await Promise.all(
+  await Promise.all(
     managedResource.map((resource) => addManagedResource(resource, node))
   );
-  node.managedResources.push(
-    ...results.filter((k8sResource) => k8sResource !== null)
-  );
+
   return node;
 };
 
 const addManagedResource = async (
   managedResource: KubernetesResource,
   parentNode: ResourceFunctionNode
-): Promise<ManagedKubernetesResource | null> => {
+) => {
   const k8sResource = await getKubernetesResource(managedResource);
   if (!k8sResource) {
-    return null;
+    return;
   }
   if (!parentNode.managedResources) {
     parentNode.managedResources = [];
@@ -304,7 +300,6 @@ const addManagedResource = async (
     readonly: managedResource.readonly,
   };
   parentNode.managedResources.push(resource);
-  return resource;
 };
 
 const getSubWorkflowNode = async (
