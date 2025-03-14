@@ -15,13 +15,7 @@ import {
   FunctionNode,
   ManagedKubernetesResource,
 } from "../types/graph";
-import {
-  Step,
-  ConfigStep,
-  WorkflowParent,
-  Workflow,
-  RefSwitch,
-} from "../types/workflow";
+import { Step, WorkflowParent, Workflow, RefSwitch } from "../types/workflow";
 import { getResourceFunction, getValueFunction } from "./functions";
 import { ValueFunction, ResourceFunction } from "../types/function";
 import { KubernetesObjectWithSpecAndStatus } from "../types/kubernetes";
@@ -39,7 +33,6 @@ import {
 import { getK8sObjectApi } from "./kubernetes";
 
 const WORKFLOW_STEP_DEPENDENCY_REGEX = /=steps\.([a-zA-Z0-9_-]+)\.?.*/;
-const DEFAULT_CONFIG_STEP_LABEL = "config";
 
 type DedupedGraph = {
   nodes: Record<string, KNode>;
@@ -103,14 +96,8 @@ const getWorkflowGraphWithLeafNodes = async (
     managedResources = parseManagedResources(parent);
   }
 
-  const allSteps: (Step | ConfigStep)[] = [];
-  if (workflow.spec.configStep) {
-    allSteps.push(workflow.spec.configStep);
-  }
-  allSteps.push(...workflow.spec.steps);
-
   // Create nodes for all steps.
-  for (const step of allSteps) {
+  for (const step of workflow.spec.steps) {
     await addStepNodes(namespace, step, graph, stepNodes, managedResources);
   }
 
@@ -118,8 +105,8 @@ const getWorkflowGraphWithLeafNodes = async (
   // If the step doesn't depend on anything, then create an edge back to the
   // Workflow since this indicates it's a root step.
   const nodesWithDependents = new Set<string>();
-  allSteps.forEach((step) => {
-    const stepLabel = step.label || DEFAULT_CONFIG_STEP_LABEL;
+  workflow.spec.steps.forEach((step) => {
+    const stepLabel = step.label;
     let hasDependency = false;
     const stepNodeId = stepNodes[stepLabel];
     if (!stepNodeId || !graph.nodes[stepNodeId]) {
@@ -174,19 +161,19 @@ const getWorkflowGraphWithLeafNodes = async (
 
 const addStepNodes = async (
   namespace: string,
-  step: Step | ConfigStep,
+  step: Step,
   graph: DedupedGraph,
   stepNodes: Record<string, string>,
   managedResources?: ManagedResources
 ) => {
-  if (!("ref" in step) && !("refSwitch" in step)) {
+  if (!step.refSwitch && !step.ref) {
     // This is an invalid step.
     return;
   }
 
-  const stepLabel = step.label || DEFAULT_CONFIG_STEP_LABEL;
+  const stepLabel = step.label;
 
-  if ("refSwitch" in step && step.refSwitch) {
+  if (step.refSwitch) {
     // Handle refSwitch step.
     await addRefSwitchNode(
       graph,

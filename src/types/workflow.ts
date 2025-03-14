@@ -9,7 +9,6 @@ export interface Workflow extends KubernetesObjectWithSpecAndStatus {
 
 export type WorkflowSpec = {
   crdRef?: CRDRef;
-  configStep?: ConfigStep;
   steps: Step[];
 };
 
@@ -17,14 +16,6 @@ export type CRDRef = {
   apiGroup: string;
   version: string;
   kind: string;
-};
-
-export type ConfigStep = {
-  label?: string;
-  ref: LogicRef;
-  inputs?: Record<string, unknown>;
-  condition?: Condition;
-  state?: Record<string, unknown>;
 };
 
 export type Step = {
