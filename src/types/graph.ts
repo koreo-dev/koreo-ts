@@ -2,6 +2,19 @@ import { KubernetesObjectWithSpecAndStatus } from "./kubernetes";
 import { ValueFunction, ResourceFunction } from "./function";
 import { WorkflowParent, Workflow } from "./workflow";
 
+export type InflatedNode = {
+  id: string;
+  label: string;
+  type: string;
+  krm?: KubernetesObjectWithSpecAndStatus;
+  metadata?: Record<string, unknown>;
+};
+
+export type InflatedGraph = {
+  nodes: InflatedNode[];
+  edges: KEdge[];
+};
+
 export type NodeType =
   | "Parent"
   | "Workflow"
@@ -11,7 +24,11 @@ export type NodeType =
   | "SubWorkflow"
   | "ManagedResource";
 
-export type EdgeType = "ParentToWorkflow" | "WorkflowToStep" | "StepToStep";
+export type EdgeType =
+  | "ParentToWorkflow"
+  | "WorkflowToStep"
+  | "StepToStep"
+  | "StepToResource";
 
 export type KNode =
   | WorkflowNode

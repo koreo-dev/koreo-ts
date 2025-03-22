@@ -10,3 +10,4 @@ export * from "./api/managed-resources";
 export * from "./api/resource-templates";
 export * from "./api/workflows";
 export * from "./api/graphs";
+export * from "./api/inflated-graphs";
