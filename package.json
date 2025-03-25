@@ -1,6 +1,6 @@
 {
   "name": "@koreo/koreo-ts",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "description": "Typescript library for Koreo",
   "main": "dist/index.ts",
