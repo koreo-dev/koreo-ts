@@ -27,6 +27,45 @@ export const parseManagedResources = (
   }
 };
 
+export const collectManagedResources = (
+  resources: ManagedResources
+): KubernetesResource[] => {
+  const collected: KubernetesResource[] = [];
+  Object.values(resources).forEach((resource) => {
+    // Handle null case
+    if (resource === null) {
+      return;
+    }
+
+    // Handle single KubernetesResource (ResourceFunction)
+    if (isKubernetesResource(resource)) {
+      collected.push(resource);
+      return;
+    }
+
+    // Handle array of KubernetesResources/ManagedResources
+    if (isKubernetesResourceOrManagedResourcesArray(resource)) {
+      resource.forEach((k8sResourceOrManagedResources) => {
+        if (isKubernetesResource(k8sResourceOrManagedResources)) {
+          collected.push(k8sResourceOrManagedResources);
+        } else {
+          collected.push(
+            ...collectManagedResources(k8sResourceOrManagedResources)
+          );
+        }
+      });
+      return;
+    }
+
+    // Handle nested ManagedResources (sub-workflow)
+    if (isManagedResources(resource)) {
+      collected.push(...collectManagedResources(resource));
+      return;
+    }
+  });
+  return collected;
+};
+
 export const countManagedResources = (resources: ManagedResources): number => {
   return Object.values(resources).reduce((sum, resource) => {
     // Handle null case
