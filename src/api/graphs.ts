@@ -97,9 +97,11 @@ const getWorkflowGraphWithLeafNodes = async (
   }
 
   // Create nodes for all steps.
-  for (const step of workflow.spec.steps) {
-    await addStepNodes(namespace, step, graph, stepNodes, managedResources);
-  }
+  await Promise.all(
+    workflow.spec.steps.map((step) =>
+      addStepNodes(namespace, step, graph, stepNodes, managedResources)
+    )
+  );
 
   // For each step, create edges back to the nodes for the steps it depends on.
   // If the step doesn't depend on anything, then create an edge back to the
