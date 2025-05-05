@@ -32,7 +32,7 @@ import {
 } from "./managed-resources";
 import { getK8sObjectApi } from "./kubernetes";
 
-const WORKFLOW_STEP_DEPENDENCY_REGEX = /=steps\.([a-zA-Z0-9_-]+)\.?.*/;
+const WORKFLOW_STEP_DEPENDENCY_REGEX = /steps\.([a-zA-Z0-9_-]+)/g;
 
 type DedupedGraph = {
   nodes: Record<string, KNode>;
@@ -117,27 +117,38 @@ const getWorkflowGraphWithLeafNodes = async (
     const stepNode = graph.nodes[stepNodeId];
 
     if (step.inputs) {
-      Object.values(step.inputs).forEach((inputValue) => {
-        if (typeof inputValue !== "string") {
-          return;
-        }
-        const match = inputValue.match(WORKFLOW_STEP_DEPENDENCY_REGEX);
-        if (match) {
-          hasDependency = true;
-          const parentLabel = match[1];
-          const parentNodeId = stepNodes[parentLabel];
-          if (!parentNodeId || !graph.nodes[parentNodeId]) {
-            return;
-          }
-          const edge = createEdge(
-            graph.nodes[parentNodeId],
-            stepNode,
-            "StepToStep"
-          );
-          graph.edges[edge.id] = edge;
-          nodesWithDependents.add(parentNodeId);
-        }
-      });
+      hasDependency = findAndAddStepDependencies(
+        step.inputs,
+        stepNode,
+        stepNodes,
+        graph,
+        nodesWithDependents
+      );
+    }
+
+    // If the step has a forEach, ensure we account for itemIn expressions
+    // when computing dependencies.
+    if (step.forEach) {
+      hasDependency =
+        findAndAddStepDependencies(
+          step.forEach.itemIn,
+          stepNode,
+          stepNodes,
+          graph,
+          nodesWithDependents
+        ) || hasDependency;
+    }
+
+    // Same for refSwitch switchOn expressions.
+    if (step.refSwitch) {
+      hasDependency =
+        findAndAddStepDependencies(
+          step.refSwitch.switchOn,
+          stepNode,
+          stepNodes,
+          graph,
+          nodesWithDependents
+        ) || hasDependency;
     }
 
     if (hasDependency) {
@@ -159,6 +170,43 @@ const getWorkflowGraphWithLeafNodes = async (
   );
 
   return { graph: dedupedGraphToGraph(graph), leafNodes };
+};
+
+const findAndAddStepDependencies = (
+  value: unknown,
+  stepNode: KNode,
+  stepNodes: Record<string, string>,
+  graph: DedupedGraph,
+  nodesWithDependents: Set<string>
+): boolean => {
+  let foundDependency = false;
+
+  const processValue = (val: unknown) => {
+    if (typeof val === "string" && val.trim().startsWith("=")) {
+      const matches = [...val.matchAll(WORKFLOW_STEP_DEPENDENCY_REGEX)];
+      matches.forEach((match) => {
+        const parentLabel = match[1];
+        const parentNodeId = stepNodes[parentLabel];
+        if (parentNodeId && graph.nodes[parentNodeId]) {
+          const edge = createEdge(
+            graph.nodes[parentNodeId],
+            stepNode,
+            "StepToStep"
+          );
+          graph.edges[edge.id] = edge;
+          nodesWithDependents.add(parentNodeId);
+        }
+        foundDependency = true;
+      });
+    } else if (Array.isArray(val)) {
+      val.forEach((item) => processValue(item));
+    } else if (typeof val === "object" && val !== null) {
+      Object.values(val).forEach((nestedVal) => processValue(nestedVal));
+    }
+  };
+
+  processValue(value);
+  return foundDependency;
 };
 
 const addStepNodes = async (
