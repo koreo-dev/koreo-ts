@@ -117,27 +117,13 @@ const getWorkflowGraphWithLeafNodes = async (
     const stepNode = graph.nodes[stepNodeId];
 
     if (step.inputs) {
-      Object.values(step.inputs).forEach((inputValue) => {
-        if (typeof inputValue !== "string") {
-          return;
-        }
-        const match = inputValue.match(WORKFLOW_STEP_DEPENDENCY_REGEX);
-        if (match) {
-          hasDependency = true;
-          const parentLabel = match[1];
-          const parentNodeId = stepNodes[parentLabel];
-          if (!parentNodeId || !graph.nodes[parentNodeId]) {
-            return;
-          }
-          const edge = createEdge(
-            graph.nodes[parentNodeId],
-            stepNode,
-            "StepToStep"
-          );
-          graph.edges[edge.id] = edge;
-          nodesWithDependents.add(parentNodeId);
-        }
-      });
+      hasDependency = findStepDependencies(
+        step.inputs,
+        stepNode,
+        stepNodes,
+        graph,
+        nodesWithDependents
+      );
     }
 
     if (hasDependency) {
@@ -159,6 +145,39 @@ const getWorkflowGraphWithLeafNodes = async (
   );
 
   return { graph: dedupedGraphToGraph(graph), leafNodes };
+};
+
+const findStepDependencies = (
+  value: unknown,
+  stepNode: KNode,
+  stepNodes: Record<string, string>,
+  graph: DedupedGraph,
+  nodesWithDependents: Set<string>
+): boolean => {
+  if (typeof value === "string") {
+    const match = value.match(WORKFLOW_STEP_DEPENDENCY_REGEX);
+    if (match) {
+      const parentLabel = match[1];
+      const parentNodeId = stepNodes[parentLabel];
+      if (!parentNodeId || !graph.nodes[parentNodeId]) {
+        return true; // Dependency found but node missing
+      }
+      const edge = createEdge(
+        graph.nodes[parentNodeId],
+        stepNode,
+        "StepToStep"
+      );
+      graph.edges[edge.id] = edge;
+      nodesWithDependents.add(parentNodeId);
+      return true;
+    }
+  } else if (typeof value === "object" && value !== null) {
+    // Recursively check all values in objects or arrays
+    return Object.values(value).some((v) =>
+      findStepDependencies(v, stepNode, stepNodes, graph, nodesWithDependents)
+    );
+  }
+  return false;
 };
 
 const addStepNodes = async (
