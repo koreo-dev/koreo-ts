@@ -354,7 +354,8 @@ const getSubWorkflowNode = async (
   const subWorkflowNode = createSubWorkflowNode(
     workflowGraph.nodes[0] as WorkflowNode,
     workflowGraph,
-    leafNodes
+    leafNodes,
+    stepLabel
   );
 
   if (!managedResources) {
@@ -555,7 +556,7 @@ const createWorkflowNode = (
   stepLabel?: string
 ): WorkflowNode => {
   return {
-    id: workflow.metadata?.uid || uuidv4(),
+    id: `${stepLabel}-${workflow.metadata?.uid || uuidv4()}`,
     krm: workflow,
     type: "Workflow",
     dependents: {},
@@ -565,27 +566,27 @@ const createWorkflowNode = (
 
 const createValueFunctionNode = (
   logic: ValueFunction,
-  stepLabel?: string
+  stepLabel: string
 ): ValueFunctionNode => {
   return {
-    id: logic.metadata?.uid || uuidv4(),
+    id: `${stepLabel}-${logic.metadata?.uid || uuidv4()}`,
     krm: logic,
     type: "ValueFunction",
     dependents: {},
-    metadata: stepLabel ? { label: stepLabel } : undefined,
+    metadata: { label: stepLabel },
   };
 };
 
 const createResourceFunctionNode = (
   logic: ResourceFunction,
-  stepLabel?: string
+  stepLabel: string
 ): ResourceFunctionNode => {
   return {
-    id: logic.metadata?.uid || uuidv4(),
+    id: `${stepLabel}-${logic.metadata?.uid || uuidv4()}`,
     krm: logic,
     type: "ResourceFunction",
     dependents: {},
-    metadata: stepLabel ? { label: stepLabel } : undefined,
+    metadata: { label: stepLabel },
   };
 };
 
@@ -602,9 +603,9 @@ const createRefSwitchNode = (
   switchOn: string,
   caseNodes: Record<string, LogicNode>,
   managedResources: ManagedKubernetesResource[],
-  stepLabel?: string
+  stepLabel: string
 ): RefSwitchNode => {
-  const id = `switch-${Object.values(caseNodes)
+  const id = `${stepLabel}-switch-${Object.values(caseNodes)
     .map((caseNode) => caseNode.id)
     .join("-")}`;
   return {
@@ -614,18 +615,17 @@ const createRefSwitchNode = (
     caseNodes: caseNodes,
     managedResources: managedResources,
     dependents: {},
-    metadata: stepLabel ? { label: stepLabel } : undefined,
+    metadata: { label: stepLabel },
   };
 };
 
 const createSubWorkflowNode = (
   workflowNode: WorkflowNode,
   workflowGraph: Graph,
-  workflowLeafNodeIds: string[]
+  workflowLeafNodeIds: string[],
+  stepLabel: string
 ): SubWorkflowNode => {
-  const id = workflowNode.krm.metadata?.uid
-    ? `sub-${workflowNode.krm.metadata.uid}`
-    : `sub-${uuidv4()}`;
+  const id = `${stepLabel}-sub-${workflowNode.krm.metadata?.uid || uuidv4()}`;
   return {
     id: id,
     workflowGraph,
