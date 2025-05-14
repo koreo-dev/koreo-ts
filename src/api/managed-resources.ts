@@ -18,6 +18,10 @@ export const parseManagedResources = (
         ]
       : managedResourcesStringOrParent;
 
+  if (!managedResourcesString) {
+    return { workflow: "", resources: {} };
+  }
+
   try {
     const parsed = JSON.parse(managedResourcesString);
     return parsed;

@@ -1,4 +1,3 @@
-import { KubernetesListObject } from "@kubernetes/client-node";
 import { getK8sCRDApi } from "./kubernetes";
 import { Workflow, CRDRef, WorkflowParent } from "../types/workflow";
 
@@ -6,41 +5,59 @@ const GROUP = "koreo.dev";
 const VERSION = "v1beta1";
 const PLURAL = "workflows";
 
-export const listWorkflows = async (namespace: string): Promise<Workflow[]> => {
+export const listWorkflows = async (
+  namespaces: string | string[]
+): Promise<Workflow[]> => {
   const api = getK8sCRDApi();
+  const namespaceArray = Array.isArray(namespaces) ? namespaces : [namespaces];
+
   try {
-    const workflows = await api.listNamespacedCustomObject({
-      group: GROUP,
-      version: VERSION,
-      namespace,
-      plural: PLURAL,
-    });
-    return workflows.items;
+    const workflowPromises = namespaceArray.map((namespace) =>
+      api.listNamespacedCustomObject({
+        group: GROUP,
+        version: VERSION,
+        namespace,
+        plural: PLURAL,
+      })
+    );
+
+    const results = await Promise.all(workflowPromises);
+
+    return results.flatMap((result) => result.items);
   } catch (err) {
+    console.error(`Failed to get workflows for namespaces ${namespaceArray}`);
     return [];
   }
 };
 
 export const getWorkflowsForCrdRef = async (
-  namespace: string,
+  namespaces: string | string[],
   crdRef: CRDRef
 ): Promise<Workflow[]> => {
   const api = getK8sCRDApi();
+  const namespaceArray = Array.isArray(namespaces) ? namespaces : [namespaces];
+
   try {
-    const workflows: KubernetesListObject<Workflow> =
-      await api.listNamespacedCustomObject({
+    const workflowPromises = namespaceArray.map((namespace) =>
+      api.listNamespacedCustomObject({
         group: GROUP,
         version: VERSION,
         namespace,
         plural: PLURAL,
-      });
-    return workflows.items.filter(
+      })
+    );
+
+    const results = await Promise.all(workflowPromises);
+    const workflows = results.flatMap((result) => result.items);
+
+    return workflows.filter(
       (workflow) =>
         workflow.spec.crdRef?.apiGroup === crdRef.apiGroup &&
         workflow.spec.crdRef?.kind === crdRef.kind &&
         workflow.spec.crdRef?.version === crdRef.version
     );
   } catch (err) {
+    console.error(`Failed to get workflows for namespaces ${namespaceArray}`);
     return [];
   }
 };
