@@ -9,7 +9,7 @@ import {
 } from "../types/graph";
 import { KubernetesObjectWithSpecAndStatus } from "../types/kubernetes";
 import { ManagedKubernetesResource } from "../types/graph";
-import { v4 as uuidv4 } from "uuid";
+import { createHash } from "crypto";
 
 export const getInflatedWorkflowGraph = async (
   namespace: string,
@@ -62,7 +62,20 @@ const convertGraph = (
     edges: {},
   };
   koreoGraph.nodes.forEach((knode) => {
-    if (knode.type === "SubWorkflow") {
+    if (knode.type === "Workflow") {
+      const node: InflatedNode = {
+        id: knode.id,
+        label: knode.metadata?.label
+          ? (knode.metadata.label as string)
+          : knode.krm.metadata?.name!,
+        type: {
+          isKoreoType: true,
+          name: "Workflow",
+        },
+        krm: knode.krm,
+      };
+      graph.nodes[node.id] = node;
+    } else if (knode.type === "SubWorkflow") {
       if (!knode.workflowGraph.nodes) {
         return;
       }
@@ -72,7 +85,10 @@ const convertGraph = (
         label: workflowNode.metadata?.label
           ? (workflowNode.metadata.label as string)
           : workflowNode.krm.metadata?.name!,
-        type: "Sub-Workflow",
+        type: {
+          isKoreoType: true,
+          name: "SubWorkflow",
+        },
         krm: workflowNode.krm,
       };
       graph.nodes[node.id] = node;
@@ -97,7 +113,10 @@ const convertGraph = (
         label: knode.metadata?.label
           ? (knode.metadata.label as string)
           : "RefSwitch",
-        type: "RefSwitch",
+        type: {
+          isKoreoType: true,
+          name: "RefSwitch",
+        },
       };
       graph.nodes[node.id] = node;
       if (includeResources) {
@@ -109,13 +128,29 @@ const convertGraph = (
         label: knode.metadata?.label
           ? (knode.metadata.label as string)
           : knode.krm.metadata?.name!,
-        type: knode.krm.kind!,
+        type: {
+          isKoreoType: true,
+          name: "ResourceFunction",
+        },
         krm: knode.krm,
       };
       graph.nodes[node.id] = node;
       if (includeResources) {
         addResourceNodes(graph, node.id, knode.managedResources);
       }
+    } else if (knode.type === "ValueFunction") {
+      const node: InflatedNode = {
+        id: knode.id,
+        label: knode.metadata?.label
+          ? (knode.metadata.label as string)
+          : knode.krm.metadata?.name!,
+        type: {
+          isKoreoType: true,
+          name: "ValueFunction",
+        },
+        krm: knode.krm,
+      };
+      graph.nodes[node.id] = node;
     } else if (knode.type === "Parent") {
       // Use a special id in case the parent is also a managed resource to avoid cycles
       const parentNodeId = `parent-${knode.id}`;
@@ -124,7 +159,10 @@ const convertGraph = (
         label: knode.metadata?.label
           ? (knode.metadata.label as string)
           : knode.krm.metadata?.name!,
-        type: knode.krm.kind!,
+        type: {
+          isKoreoType: false,
+          name: knode.krm.kind!,
+        },
         krm: knode.krm,
       };
       graph.nodes[node.id] = node;
@@ -134,16 +172,6 @@ const convertGraph = (
       if (parentEdge) {
         parentEdge.source = parentNodeId;
       }
-    } else {
-      const node: InflatedNode = {
-        id: knode.id,
-        label: knode.metadata?.label
-          ? (knode.metadata.label as string)
-          : knode.krm.metadata?.name!,
-        type: knode.krm.kind!,
-        krm: knode.krm,
-      };
-      graph.nodes[node.id] = node;
     }
   });
   koreoGraph.edges.forEach((kedge) => {
@@ -166,7 +194,20 @@ const convertGraphExpanded = (
   };
   const workflowLeafNodes: Record<string, string[]> = {};
   koreoGraph.nodes.forEach((knode) => {
-    if (knode.type === "SubWorkflow") {
+    if (knode.type === "Workflow") {
+      const node: InflatedNode = {
+        id: knode.id,
+        label: knode.metadata?.label
+          ? (knode.metadata.label as string)
+          : knode.krm.metadata?.name!,
+        type: {
+          isKoreoType: true,
+          name: "Workflow",
+        },
+        krm: knode.krm,
+      };
+      graph.nodes[node.id] = node;
+    } else if (knode.type === "SubWorkflow") {
       if (!knode.workflowGraph.nodes) {
         return;
       }
@@ -194,7 +235,10 @@ const convertGraphExpanded = (
       const switchInNode: InflatedNode = {
         id: switchInNodeId,
         label: switchInName,
-        type: "RefSwitch",
+        type: {
+          isKoreoType: true,
+          name: "RefSwitch",
+        },
       };
       graph.nodes[switchInNode.id] = switchInNode;
       const functionCaseNodes: string[] = [];
@@ -221,10 +265,23 @@ const convertGraphExpanded = (
             leafNodes: caseNode.workflowLeafNodeIds,
           });
         } else {
+          const isKoreoType =
+            caseNode.krm.kind! === "ResourceFunction" ||
+            caseNode.krm.kind! === "ValueFunction";
           const node: InflatedNode = {
             id: caseNode.id,
             label: `case: ${caseStr}`,
-            type: caseNode.krm.kind!,
+            type: isKoreoType
+              ? {
+                  isKoreoType: true,
+                  name: caseNode.krm.kind! as
+                    | "ResourceFunction"
+                    | "ValueFunction",
+                }
+              : {
+                  isKoreoType: false,
+                  name: caseNode.krm.kind!,
+                },
             krm: caseNode.krm,
           };
           graph.nodes[node.id] = node;
@@ -239,7 +296,10 @@ const convertGraphExpanded = (
       const switchOutNode: InflatedNode = {
         id: switchOutNodeId,
         label: switchOutName,
-        type: "RefSwitch Result",
+        type: {
+          isKoreoType: true,
+          name: "RefSwitchResult",
+        },
       };
       graph.nodes[switchOutNode.id] = switchOutNode;
       if (includeResources) {
@@ -293,13 +353,29 @@ const convertGraphExpanded = (
         label: knode.metadata?.label
           ? (knode.metadata.label as string)
           : knode.krm.metadata?.name!,
-        type: knode.krm.kind!,
+        type: {
+          isKoreoType: true,
+          name: "ResourceFunction",
+        },
         krm: knode.krm,
       };
       graph.nodes[node.id] = node;
       if (includeResources) {
         addResourceNodes(graph, node.id, knode.managedResources);
       }
+    } else if (knode.type === "ValueFunction") {
+      const node: InflatedNode = {
+        id: knode.id,
+        label: knode.metadata?.label
+          ? (knode.metadata.label as string)
+          : knode.krm.metadata?.name!,
+        type: {
+          isKoreoType: true,
+          name: "ValueFunction",
+        },
+        krm: knode.krm,
+      };
+      graph.nodes[node.id] = node;
     } else if (knode.type === "Parent") {
       // Use a special id in case the parent is also a managed resource to avoid cycles
       const parentNodeId = `parent-${knode.id}`;
@@ -308,7 +384,10 @@ const convertGraphExpanded = (
         label: knode.metadata?.label
           ? (knode.metadata.label as string)
           : knode.krm.metadata?.name!,
-        type: knode.krm.kind!,
+        type: {
+          isKoreoType: false,
+          name: knode.krm.kind!,
+        },
         krm: knode.krm,
       };
       graph.nodes[node.id] = node;
@@ -318,16 +397,6 @@ const convertGraphExpanded = (
       if (parentEdge) {
         parentEdge.source = parentNodeId;
       }
-    } else {
-      const node: InflatedNode = {
-        id: knode.id,
-        label: knode.metadata?.label
-          ? (knode.metadata.label as string)
-          : knode.krm.metadata?.name!,
-        type: knode.krm.kind!,
-        krm: knode.krm,
-      };
-      graph.nodes[node.id] = node;
     }
   });
 
@@ -353,17 +422,23 @@ const addResourceNodes = (
 ) => {
   (managedResources || []).forEach((managedResource) => {
     const resource = managedResource.resource;
+
     const resourceNode: InflatedNode = {
-      id: resource.metadata!.uid || uuidv4(),
-      label: resource.metadata!.name!,
-      type: resource.kind!,
-      krm: resource,
+      id: resource?.metadata!.uid ?? hashObject(managedResource.definition),
+      label: managedResource.definition.name,
+      type: {
+        isKoreoType: false,
+        name: managedResource.definition.kind,
+      },
+      krm: resource ? resource : undefined,
       metadata: {
         managedResource: true,
-        readonly: managedResource.readonly,
+        readonly: managedResource.definition.readonly,
       },
     };
+
     graph.nodes[resourceNode.id] = resourceNode;
+
     const edge = createEdge(parentNodeId, resourceNode.id, "StepToResource");
     graph.edges[edge.id] = edge;
   });
@@ -380,4 +455,8 @@ const createEdge = (
     target: targetId,
     type: edgeType,
   };
+};
+
+const hashObject = (obj: any): string => {
+  return createHash("sha256").update(JSON.stringify(obj)).digest("hex");
 };

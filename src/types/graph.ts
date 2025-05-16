@@ -1,11 +1,28 @@
 import { KubernetesObjectWithSpecAndStatus } from "./kubernetes";
 import { ValueFunction, ResourceFunction } from "./function";
 import { WorkflowParent, Workflow } from "./workflow";
+import { KubernetesResource } from "./managed-resource";
+
+export type KoreoType = {
+  isKoreoType: true;
+  name:
+    | "Workflow"
+    | "SubWorkflow"
+    | "RefSwitch"
+    | "RefSwitchResult"
+    | "ResourceFunction"
+    | "ValueFunction";
+};
+
+export type NonKoreoType = {
+  isKoreoType: false;
+  name: string;
+};
 
 export type InflatedNode = {
   id: string;
   label: string;
-  type: string;
+  type: KoreoType | NonKoreoType;
   krm?: KubernetesObjectWithSpecAndStatus;
   metadata?: Record<string, unknown>;
 };
@@ -21,8 +38,7 @@ export type NodeType =
   | "ValueFunction"
   | "ResourceFunction"
   | "RefSwitch"
-  | "SubWorkflow"
-  | "ManagedResource";
+  | "SubWorkflow";
 
 export type EdgeType =
   | "ParentToWorkflow"
@@ -108,6 +124,6 @@ export type ParentNode = {
 };
 
 export type ManagedKubernetesResource = {
-  resource: KubernetesObjectWithSpecAndStatus;
-  readonly: boolean;
+  definition: KubernetesResource;
+  resource: KubernetesObjectWithSpecAndStatus | null;
 };
