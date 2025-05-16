@@ -38,8 +38,7 @@ export type NodeType =
   | "ValueFunction"
   | "ResourceFunction"
   | "RefSwitch"
-  | "SubWorkflow"
-  | "ManagedResource";
+  | "SubWorkflow";
 
 export type EdgeType =
   | "ParentToWorkflow"
