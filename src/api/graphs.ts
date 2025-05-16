@@ -326,15 +326,12 @@ const addManagedResource = async (
   parentNode: ResourceFunctionNode
 ) => {
   const k8sResource = await getKubernetesResource(managedResource);
-  if (!k8sResource) {
-    return;
-  }
   if (!parentNode.managedResources) {
     parentNode.managedResources = [];
   }
   const resource = {
+    definition: managedResource,
     resource: k8sResource,
-    readonly: managedResource.readonly,
   };
   parentNode.managedResources.push(resource);
 };

@@ -9,7 +9,7 @@ import {
 } from "../types/graph";
 import { KubernetesObjectWithSpecAndStatus } from "../types/kubernetes";
 import { ManagedKubernetesResource } from "../types/graph";
-import { v4 as uuidv4 } from "uuid";
+import { createHash } from "crypto";
 
 export const getInflatedWorkflowGraph = async (
   namespace: string,
@@ -422,17 +422,23 @@ const addResourceNodes = (
 ) => {
   (managedResources || []).forEach((managedResource) => {
     const resource = managedResource.resource;
+
     const resourceNode: InflatedNode = {
-      id: resource.metadata!.uid || uuidv4(),
-      label: resource.metadata!.name!,
-      type: resource.kind!,
-      krm: resource,
+      id: resource?.metadata!.uid ?? hashObject(managedResource.definition),
+      label: managedResource.definition.name,
+      type: {
+        isKoreoType: false,
+        name: managedResource.definition.kind,
+      },
+      krm: resource ? resource : undefined,
       metadata: {
         managedResource: true,
-        readonly: managedResource.readonly,
+        readonly: managedResource.definition.readonly,
       },
     };
+
     graph.nodes[resourceNode.id] = resourceNode;
+
     const edge = createEdge(parentNodeId, resourceNode.id, "StepToResource");
     graph.edges[edge.id] = edge;
   });
@@ -449,4 +455,8 @@ const createEdge = (
     target: targetId,
     type: edgeType,
   };
+};
+
+const hashObject = (obj: any): string => {
+  return createHash("sha256").update(JSON.stringify(obj)).digest("hex");
 };

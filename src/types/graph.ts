@@ -124,6 +124,6 @@ export type ParentNode = {
 };
 
 export type ManagedKubernetesResource = {
-  resource: KubernetesObjectWithSpecAndStatus;
-  readonly: boolean;
+  definition: KubernetesResource;
+  resource: KubernetesObjectWithSpecAndStatus | null;
 };
