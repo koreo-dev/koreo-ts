@@ -6,18 +6,28 @@ const VERSION = "v1beta1";
 const PLURAL = "resourcetemplates";
 
 export const listResourceTemplates = async (
-  namespace: string
+  namespaces: string | string[]
 ): Promise<ResourceTemplate[]> => {
   const api = getK8sCRDApi();
+  const namespaceArray = Array.isArray(namespaces) ? namespaces : [namespaces];
+
   try {
-    const templates = await api.listNamespacedCustomObject({
-      group: GROUP,
-      version: VERSION,
-      namespace,
-      plural: PLURAL,
-    });
-    return templates.items;
+    const templatePromises = namespaceArray.map((namespace) =>
+      api.listNamespacedCustomObject({
+        group: GROUP,
+        version: VERSION,
+        namespace,
+        plural: PLURAL,
+      })
+    );
+
+    const results = await Promise.all(templatePromises);
+
+    return results.flatMap((result) => result.items);
   } catch (err) {
+    console.error(
+      `Failed to get resource templates for namespaces ${namespaceArray}`
+    );
     return [];
   }
 };
