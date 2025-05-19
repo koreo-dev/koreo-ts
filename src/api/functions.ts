@@ -6,6 +6,48 @@ const VERSION = "v1beta1";
 const RESOURCE_FUNCTION_PLURAL = "resourcefunctions";
 const VALUE_FUNCTION_PLURAL = "valuefunctions";
 
+export const listFunctions = async (
+  namespaces: string | string[]
+): Promise<Function[]> => {
+  const api = getK8sCRDApi();
+  const namespaceArray = Array.isArray(namespaces) ? namespaces : [namespaces];
+
+  try {
+    const valueFunctionPromises = namespaceArray.map((namespace) =>
+      api.listNamespacedCustomObject({
+        group: GROUP,
+        version: VERSION,
+        namespace,
+        plural: VALUE_FUNCTION_PLURAL,
+      })
+    );
+    const resourceFunctionPromises = namespaceArray.map((namespace) =>
+      api.listNamespacedCustomObject({
+        group: GROUP,
+        version: VERSION,
+        namespace,
+        plural: RESOURCE_FUNCTION_PLURAL,
+      })
+    );
+
+    const [valueResults, resourceResults] = await Promise.all([
+      Promise.all(valueFunctionPromises),
+      Promise.all(resourceFunctionPromises),
+    ]);
+
+    const valueFunctions = valueResults.flatMap((result) => result.items);
+    const resourceFunctions = resourceResults.flatMap((result) => result.items);
+
+    return [...valueFunctions, ...resourceFunctions];
+  } catch (err) {
+    console.error(
+      `Failed to get functions for namespaces ${namespaceArray}`,
+      err
+    );
+    return [];
+  }
+};
+
 export const getFunction = async (
   functionId: string,
   kind: string,
